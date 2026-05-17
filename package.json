@@ -19,5 +19,14 @@
         "tailwindcss": "^3.2.1",
         "vite": "^7.0.7",
         "vue": "^3.4.0"
+    },
+    "dependencies": {
+        "@formkit/themes": "^2.0.0",
+        "@formkit/vue": "^2.0.0",
+        "@heroicons/vue": "^2.2.0",
+        "chart.js": "^4.5.1",
+        "pinia": "^3.0.4",
+        "sweetalert2": "^11.26.24",
+        "vue-chartjs": "^5.3.3"
     }
 }

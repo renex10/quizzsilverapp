@@ -7,21 +7,19 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Agrega la columna role_id a la tabla users, referenciando roles.id.
+     * MIGRACIÓN DESACTIVADA.
+     *
+     * role_id e is_active ya fueron incluidos directamente en
+     * 0001_01_01_000000_create_users_table.php.
+     * Esta migración se mantiene vacía para no romper el historial.
      */
     public function up(): void
     {
-        Schema::table('users', function (Blueprint $table) {
-            // Añade role_id después del campo 'id' (opcional) y con clave foránea
-            $table->foreignId('role_id')->after('id')->constrained('roles');
-        });
+        // vacío intencionalmente
     }
 
     public function down(): void
     {
-        Schema::table('users', function (Blueprint $table) {
-            $table->dropForeign(['role_id']);
-            $table->dropColumn('role_id');
-        });
+        // vacío intencionalmente
     }
 };

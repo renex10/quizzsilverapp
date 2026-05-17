@@ -20,6 +20,7 @@ class DatabaseSeeder extends Seeder
             AdminUserSeeder::class,     // Luego crea el usuario administrador
             SeriesSeeder::class,        // Ahora series de ejemplo
             ExamSeeder::class,          // Finalmente exámenes de ejemplo (requieren series)
+            UserSeeder::class,          // Crea el usuario estudiante (requiere roles)
         ]);
     }
 }

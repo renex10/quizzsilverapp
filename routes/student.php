@@ -1,29 +1,33 @@
 <?php
+/* routes\student.php */
 
-use App\Http\Controllers\Student\DashboardController;
 use App\Http\Controllers\Student\CatalogController;
-use App\Http\Controllers\Student\AttemptController;
-use App\Http\Controllers\Student\ResultController;
+use App\Http\Controllers\Student\DashboardController;
 use App\Http\Controllers\Student\StatsController;
+use App\Http\Controllers\Shared\AttemptController;
 use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
-| Rutas del Panel de Estudiante (y admin con permiso)
+| Rutas del Panel de Estudiante
 |--------------------------------------------------------------------------
-| Middlewares: 'auth' y 'student' (este permite a admin también).
+| Protegidas por middlewares 'auth' y 'student'.
 | Prefijo '/student' y nombre 'student.' aplicados desde web.php.
+|
+| NOTA: las rutas compartidas de ejecución (answer, heartbeat, complete,
+| result) están en web.php bajo /attempts — accesibles por ambos roles.
 */
 
+// Dashboard del estudiante
 Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
-Route::get('/catalog', [CatalogController::class, 'index'])->name('catalog');
+// Catálogo de evaluaciones disponibles
+Route::get('/catalog', [CatalogController::class, 'index'])->name('catalog.index');
 
-Route::get('/attempt/{examId}', [AttemptController::class, 'start'])->name('attempt.start');
-Route::post('/attempt/{attemptId}/answer', [AttemptController::class, 'storeAnswer'])->name('attempt.store-answer');
-Route::post('/attempt/{attemptId}/complete', [AttemptController::class, 'complete'])->name('attempt.complete');
-Route::post('/attempt/{attemptId}/heartbeat', [AttemptController::class, 'heartbeat'])->name('attempt.heartbeat');
+// Estadísticas personales del estudiante
+Route::get('/stats', [StatsController::class, 'index'])->name('stats.index');
 
-Route::get('/results/{attemptId}', [ResultController::class, 'show'])->name('results.show');
-
-Route::get('/stats', [StatsController::class, 'index'])->name('stats');
+// El estudiante inicia un intento desde el catálogo
+// POST /student/exams/{examId}/start → renderiza Student/Attempt/Active
+Route::post('/exams/{examId}/start', [AttemptController::class, 'start'])
+     ->name('attempt.start');

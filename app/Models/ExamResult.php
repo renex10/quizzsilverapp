@@ -10,14 +10,28 @@ class ExamResult extends Model
     use HasFactory;
 
     protected $fillable = [
-        'attempt_id', 'exam_id', 'user_id', 'score', 'percentage',
-        'passed', 'time_used_seconds', 'total_correct', 'total_wrong',
+        'attempt_id',
+        'exam_id',
+        'user_id',
+        'score',
+        'percentage',
+        'passed',
+        'time_used_seconds',
+        'total_correct',
+        'total_wrong',
         'detail',
     ];
 
+    /**
+     * CORRECCIÓN: 'decimal:2' no es un cast de lectura nativo en Laravel —
+     * puede devolver string en lugar de float al leer desde la DB.
+     * Usar 'float' garantiza que score y percentage sean siempre numéricos.
+     */
     protected $casts = [
-        'detail' => 'array',
-        'passed' => 'boolean',
+        'passed'     => 'boolean',
+        'detail'     => 'array',
+        'score'      => 'float',
+        'percentage' => 'float',
     ];
 
     public function attempt()

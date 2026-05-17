@@ -8,6 +8,11 @@ return new class extends Migration
 {
     /**
      * Run the migrations.
+     *
+     * NOTA: role_id se define como unsignedBigInteger sin constrained()
+     * porque la tabla 'roles' se crea en una migración posterior.
+     * La relación se maneja a nivel de Eloquent (User belongsTo Role)
+     * sin foreign key constraint en la DB para evitar el error errno 150.
      */
     public function up(): void
     {
@@ -17,6 +22,8 @@ return new class extends Migration
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
+            $table->unsignedBigInteger('role_id')->nullable();
+            $table->boolean('is_active')->default(true);
             $table->rememberToken();
             $table->timestamps();
         });
