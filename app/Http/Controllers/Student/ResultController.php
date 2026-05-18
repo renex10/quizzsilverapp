@@ -12,6 +12,9 @@ use Illuminate\Support\Facades\Auth;
  * 
  * Solo permite acceso si el intento pertenece al usuario autenticado
  * y el estado es 'completed'.
+ * 
+ * Modificado en Sesión 4 para alinear payload con AttemptController@result:
+ * - Estructura unificada: camelCase, detail.summary, recommendation.
  */
 class ResultController extends Controller
 {
@@ -46,23 +49,23 @@ class ResultController extends Controller
             abort(404, 'No se encontraron resultados para este intento.');
         }
 
-        // Decodificar el detalle almacenado en JSON (ya debería venir como array por el cast del modelo)
+        // Decodificar el detalle almacenado en JSON
         $detail = $result->detail ?? [];
 
-        // Estadísticas adicionales para mejorar la vista
-        $totalQuestions = $detail['summary']['totalQuestions'] ?? 0;
-        $answered = $detail['summary']['answered'] ?? 0;
-        $correct = $detail['summary']['correct'] ?? 0;
-        $incorrect = $detail['summary']['incorrect'] ?? 0;
-        $criticalFailed = $detail['summary']['criticalFailed'] ?? false;
-        $timeUsed = $detail['summary']['timeUsedSeconds'] ?? $result->time_used_seconds;
+        // Extraer datos usando la nueva estructura (camelCase, con summary)
+        $summary = $detail['summary'] ?? [];
+        $totalQuestions = $summary['totalQuestions'] ?? 0;
+        $answered = $summary['answered'] ?? 0;
+        $unanswered = $summary['unanswered'] ?? 0;
+        $criticalFailed = $summary['criticalFailed'] ?? false;
 
-        // Desglose por categoría y dificultad
-        $byCategory = $detail['byCategory'] ?? [];
-        $byDifficulty = $detail['byDifficulty'] ?? [];
+        // Desglose por categoría, dificultad e incorrectas (convertir a camelCase si vienen en snake)
+        $byCategory = $detail['byCategory'] ?? $detail['by_category'] ?? [];
+        $byDifficulty = $detail['byDifficulty'] ?? $detail['by_difficulty'] ?? [];
+        $incorrectQuestions = $detail['incorrectQuestions'] ?? $detail['incorrect_questions'] ?? [];
 
-        // Lista de preguntas incorrectas (para mostrar retroalimentación)
-        $incorrectQuestions = $detail['incorrectQuestions'] ?? [];
+        // Tiempo usado
+        $timeUsed = $summary['timeUsedSeconds'] ?? $result->time_used_seconds;
 
         // Determinar recomendación (reintentar, ver estadísticas, etc.)
         $recommendation = '';
@@ -76,36 +79,38 @@ class ResultController extends Controller
             }
         }
 
-        // Preparar datos para la vista Inertia
+        // Preparar datos para la vista Inertia siguiendo el payload unificado
         return inertia('Student/Results/Show', [
             'attempt' => [
                 'id' => $attempt->id,
-                'started_at' => $attempt->started_at,
+                'exam_id' => $attempt->exam_id,          // ← consistente con AttemptController
                 'completed_at' => $attempt->completed_at,
-                'time_used_seconds' => $timeUsed,
             ],
             'exam' => [
                 'id' => $attempt->exam->id,
                 'title' => $attempt->exam->title,
+                'series' => $attempt->exam->series->title,
                 'version' => $attempt->exam->version,
                 'type' => $attempt->exam->type,
-                'series' => $attempt->exam->series->title,
             ],
             'result' => [
                 'score' => $result->score,
                 'percentage' => $result->percentage,
                 'passed' => $result->passed,
+                'time_used_seconds' => $timeUsed,
                 'total_correct' => $result->total_correct,
                 'total_wrong' => $result->total_wrong,
-                'total_questions' => $totalQuestions,
-                'answered' => $answered,
-                'unanswered' => $totalQuestions - $answered,
-                'critical_failed' => $criticalFailed,
-            ],
-            'detail' => [
-                'by_category' => $byCategory,
-                'by_difficulty' => $byDifficulty,
-                'incorrect_questions' => $incorrectQuestions,
+                'detail' => [
+                    'summary' => [
+                        'totalQuestions' => $totalQuestions,
+                        'answered' => $answered,
+                        'unanswered' => $unanswered,
+                        'criticalFailed' => $criticalFailed,
+                    ],
+                    'byCategory' => $byCategory,
+                    'byDifficulty' => $byDifficulty,
+                    'incorrectQuestions' => $incorrectQuestions,
+                ],
             ],
             'recommendation' => $recommendation,
         ]);

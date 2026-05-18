@@ -19,6 +19,8 @@ use Illuminate\Support\Facades\DB;
  * - Rendimiento por serie (puntaje promedio por serie)
  * - Preguntas más falladas históricamente (top 5)
  * - Intentos abandonados recuperables
+ * 
+ * @package App\Http\Controllers\Student
  */
 class StatsController extends Controller
 {

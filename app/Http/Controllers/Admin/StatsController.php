@@ -16,9 +16,11 @@ use Illuminate\Support\Facades\DB;
  * 
  * Muestra:
  * - Métricas globales (totales, aprobación, evolución temporal)
- * - Rendimiento por serie y comparativa entre versiones de una misma serie
+ * - Rendimiento por serie y comparativa entre versiones de una misma serie (optimizado)
  * - Actividad de cada estudiante (ranking, progreso)
  * - Exámenes con mayor tasa de reprobación
+ * 
+ * @package App\Http\Controllers\Admin
  */
 class StatsController extends Controller
 {
@@ -56,57 +58,70 @@ class StatsController extends Controller
             ->map(fn($item) => ['month' => $item->month, 'attempts' => $item->count]);
 
         // =============================================================
-        // 3. Rendimiento por serie (puntaje promedio y aprobación)
+        // 3. Rendimiento por serie (optimizado: sin N+1)
         // =============================================================
-        $performanceBySeries = Series::with('exams')
-            ->get()
-            ->map(function ($series) {
-                $examIds = $series->exams->pluck('id');
-                $results = ExamResult::whereIn('exam_id', $examIds)->get();
-                $avgPercentage = $results->avg('percentage');
-                $passedCount = $results->where('passed', true)->count();
-                $totalResults = $results->count();
-                $approvalRate = $totalResults > 0 ? round(($passedCount / $totalResults) * 100, 2) : 0;
-                return [
-                    'series_id' => $series->id,
-                    'series_title' => $series->title,
-                    'exams_count' => $series->exams->count(),
-                    'total_attempts' => $totalResults,
-                    'avg_percentage' => round($avgPercentage, 2),
-                    'approval_rate' => $approvalRate,
-                ];
-            })
-            ->sortByDesc('avg_percentage')
-            ->values();
+        // Obtener todas las series con sus exámenes (sin cargar resultados aún)
+        $series = Series::with('exams')->get();
+        $examIds = $series->flatMap(fn($s) => $s->exams->pluck('id'))->unique()->values();
+        
+        // Cargar TODOS los resultados de esos exámenes de una sola vez
+        $allResults = ExamResult::whereIn('exam_id', $examIds)->get();
+        
+        // Agrupar resultados por exam_id para acceso rápido
+        $resultsByExam = $allResults->groupBy('exam_id');
+        
+        $performanceBySeries = $series->map(function ($series) use ($resultsByExam) {
+            $examIds = $series->exams->pluck('id');
+            // Recolectar todos los resultados de los exámenes de esta serie
+            $seriesResults = collect();
+            foreach ($examIds as $eid) {
+                if ($resultsByExam->has($eid)) {
+                    $seriesResults = $seriesResults->merge($resultsByExam[$eid]);
+                }
+            }
+            $avgPercentage = $seriesResults->avg('percentage');
+            $passedCount = $seriesResults->where('passed', true)->count();
+            $totalResults = $seriesResults->count();
+            $approvalRate = $totalResults > 0 ? round(($passedCount / $totalResults) * 100, 2) : 0;
+            return [
+                'series_id' => $series->id,
+                'series_title' => $series->title,
+                'exams_count' => $series->exams->count(),
+                'total_attempts' => $totalResults,
+                'avg_percentage' => round($avgPercentage, 2),
+                'approval_rate' => $approvalRate,
+            ];
+        })->sortByDesc('avg_percentage')->values();
 
         // =============================================================
-        // 4. Comparativa entre versiones de la misma serie
-        // (para cada serie con más de un examen, comparar resultados)
+        // 4. Comparativa entre versiones de la misma serie (optimizado)
         // =============================================================
-        $seriesWithMultipleVersions = Series::with('exams')
-            ->has('exams', '>', 1)
-            ->get()
-            ->map(function ($series) {
-                $versionsData = $series->exams->map(function ($exam) {
-                    $results = $exam->examResults;
-                    $avgPercentage = $results->avg('percentage');
-                    $attemptsCount = $results->count();
-                    $passedCount = $results->where('passed', true)->count();
-                    $approvalRate = $attemptsCount > 0 ? round(($passedCount / $attemptsCount) * 100, 2) : 0;
-                    return [
-                        'exam_id' => $exam->id,
-                        'title' => $exam->title,
-                        'version' => $exam->version,
-                        'avg_percentage' => round($avgPercentage, 2),
-                        'attempts_count' => $attemptsCount,
-                        'approval_rate' => $approvalRate,
-                    ];
-                });
+        // Series con más de un examen
+        $seriesWithMultiple = Series::has('exams', '>', 1)->with('exams')->get();
+        $multiExamIds = $seriesWithMultiple->flatMap(fn($s) => $s->exams->pluck('id'))->unique();
+        $multiResults = ExamResult::whereIn('exam_id', $multiExamIds)->get()->groupBy('exam_id');
+        
+        $seriesComparison = $seriesWithMultiple->map(function ($series) use ($multiResults) {
+            $versionsData = $series->exams->map(function ($exam) use ($multiResults) {
+                $results = $multiResults->get($exam->id, collect());
+                $avgPercentage = $results->avg('percentage');
+                $attemptsCount = $results->count();
+                $passedCount = $results->where('passed', true)->count();
+                $approvalRate = $attemptsCount > 0 ? round(($passedCount / $attemptsCount) * 100, 2) : 0;
                 return [
-                    'series_title' => $series->title,
-                    'versions' => $versionsData,
+                    'exam_id' => $exam->id,
+                    'title' => $exam->title,
+                    'version' => $exam->version,
+                    'avg_percentage' => round($avgPercentage, 2),
+                    'attempts_count' => $attemptsCount,
+                    'approval_rate' => $approvalRate,
                 ];
             });
+            return [
+                'series_title' => $series->title,
+                'versions' => $versionsData,
+            ];
+        });
 
         // =============================================================
         // 5. Exámenes con mayor tasa de reprobación (top 5)
@@ -176,7 +191,7 @@ class StatsController extends Controller
             ],
             'monthly_attempts' => $monthlyAttempts,
             'performance_by_series' => $performanceBySeries,
-            'series_comparison' => $seriesWithMultipleVersions,
+            'series_comparison' => $seriesComparison,
             'most_failed_exams' => $mostFailedExams,
             'top_students' => $topStudents,
             'score_distribution' => $scoreDistribution,

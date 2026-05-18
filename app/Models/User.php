@@ -46,28 +46,28 @@ class User extends Authenticatable
     | ----------------------------------------------------------------------
     */
 
-    /**
-     * Un usuario pertenece a un rol.
-     */
     public function role()
     {
         return $this->belongsTo(Role::class);
     }
 
-    /**
-     * Un usuario tiene muchos intentos de examen.
-     */
     public function attempts()
     {
         return $this->hasMany(Attempt::class);
     }
 
-    /**
-     * Un usuario tiene muchos resultados (denormalizado para estadísticas rápidas).
-     */
     public function examResults()
     {
         return $this->hasMany(ExamResult::class);
+    }
+
+    /**
+     * Relación con los intentos de mini quizzes (topics).
+     * Se agrega en la Sesión 4 para la capa de analítica.
+     */
+    public function topicQuizAttempts()
+    {
+        return $this->hasMany(TopicQuizAttempt::class);
     }
 
     /*
@@ -76,21 +76,13 @@ class User extends Authenticatable
     | ----------------------------------------------------------------------
     */
 
-    /**
-     * Determina si el usuario es administrador.
-     */
     public function isAdmin(): bool
     {
         return $this->role && $this->role->name === 'admin';
     }
 
-    /**
-     * Determina si el usuario es estudiante.
-     */
     public function isStudent(): bool
     {
         return $this->role && $this->role->name === 'student';
     }
-
-    
 }

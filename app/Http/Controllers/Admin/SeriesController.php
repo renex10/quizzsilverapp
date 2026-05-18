@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Series;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Validator;
 
 /**
@@ -12,6 +13,10 @@ use Illuminate\Support\Facades\Validator;
  * 
  * Gestiona los agrupadores temáticos de evaluaciones.
  * Solo accesible por usuarios con rol 'admin'.
+ * 
+ * Extendido en Sesión 4 para soportar:
+ * - Nuevos campos: slug, long_description, difficulty, estimated_hours, is_featured, published_at
+ * - Sistema de imágenes polimórfico (uploadCover, deleteCover)
  */
 class SeriesController extends Controller
 {
@@ -29,9 +34,14 @@ class SeriesController extends Controller
                 return [
                     'id' => $series->id,
                     'title' => $series->title,
+                    'slug' => $series->slug,
                     'description' => $series->description,
                     'domain' => $series->domain,
+                    'difficulty' => $series->difficulty,
+                    'is_featured' => $series->is_featured,
+                    'published_at' => $series->published_at?->format('Y-m-d'),
                     'exams_count' => $series->exams_count,
+                    'cover_url' => $series->cover_url, // desde trait HasImages
                     'created_at' => $series->created_at->format('Y-m-d H:i'),
                 ];
             });
@@ -53,23 +63,35 @@ class SeriesController extends Controller
 
     /**
      * Almacena una nueva serie en la base de datos.
+     * Incluye validación de los nuevos campos.
      *
      * @param  \Illuminate\Http\Request  $request
      * @return \Illuminate\Http\RedirectResponse
      */
     public function store(Request $request)
     {
-        $validator = Validator::make($request->all(), [
+        $validated = $request->validate([
             'title' => 'required|string|max:255|unique:series,title',
             'description' => 'nullable|string',
             'domain' => 'required|string|max:255',
+            'long_description' => 'nullable|string',
+            'difficulty' => 'required|in:básico,intermedio,avanzado',
+            'estimated_hours' => 'nullable|numeric|min:0|max:999.9',
+            'is_featured' => 'boolean',
+            'published_at' => 'nullable|date',
         ]);
 
-        if ($validator->fails()) {
-            return back()->withErrors($validator)->withInput();
-        }
+        // El slug se genera automáticamente en el modelo (booted)
+        $series = Series::create($validated);
 
-        Series::create($validator->validated());
+        // Si se subió una imagen de portada (desde el frontend), procesarla
+        if ($request->hasFile('cover_image')) {
+            try {
+                $series->replaceCover($request->file('cover_image'), $request->input('cover_alt', ''));
+            } catch (\Exception $e) {
+                return back()->with('error', 'Error al subir la imagen: ' . $e->getMessage())->withInput();
+            }
+        }
 
         return redirect()->route('admin.series.index')
             ->with('success', 'Serie creada correctamente.');
@@ -91,8 +113,15 @@ class SeriesController extends Controller
             'series' => [
                 'id' => $series->id,
                 'title' => $series->title,
+                'slug' => $series->slug,
                 'description' => $series->description,
+                'long_description' => $series->long_description,
                 'domain' => $series->domain,
+                'difficulty' => $series->difficulty,
+                'estimated_hours' => $series->estimated_hours,
+                'is_featured' => $series->is_featured,
+                'published_at' => $series->published_at?->format('Y-m-d'),
+                'cover_url' => $series->cover_url,
                 'created_at' => $series->created_at->format('Y-m-d H:i'),
                 'exams' => $series->exams->map(function ($exam) {
                     return [
@@ -120,8 +149,15 @@ class SeriesController extends Controller
             'series' => [
                 'id' => $series->id,
                 'title' => $series->title,
+                'slug' => $series->slug,
                 'description' => $series->description,
+                'long_description' => $series->long_description,
                 'domain' => $series->domain,
+                'difficulty' => $series->difficulty,
+                'estimated_hours' => $series->estimated_hours,
+                'is_featured' => $series->is_featured,
+                'published_at' => $series->published_at?->format('Y-m-d'),
+                'cover_url' => $series->cover_url,
             ],
         ]);
     }
@@ -135,17 +171,27 @@ class SeriesController extends Controller
      */
     public function update(Request $request, Series $series)
     {
-        $validator = Validator::make($request->all(), [
+        $validated = $request->validate([
             'title' => 'required|string|max:255|unique:series,title,' . $series->id,
             'description' => 'nullable|string',
             'domain' => 'required|string|max:255',
+            'long_description' => 'nullable|string',
+            'difficulty' => 'required|in:básico,intermedio,avanzado',
+            'estimated_hours' => 'nullable|numeric|min:0|max:999.9',
+            'is_featured' => 'boolean',
+            'published_at' => 'nullable|date',
         ]);
 
-        if ($validator->fails()) {
-            return back()->withErrors($validator)->withInput();
-        }
+        $series->update($validated);
 
-        $series->update($validator->validated());
+        // Si se subió una nueva imagen, reemplazar la anterior
+        if ($request->hasFile('cover_image')) {
+            try {
+                $series->replaceCover($request->file('cover_image'), $request->input('cover_alt', ''));
+            } catch (\Exception $e) {
+                return back()->with('error', 'Error al actualizar la imagen: ' . $e->getMessage())->withInput();
+            }
+        }
 
         return redirect()->route('admin.series.index')
             ->with('success', 'Serie actualizada correctamente.');
@@ -163,9 +209,56 @@ class SeriesController extends Controller
             return back()->with('error', 'No se puede eliminar la serie porque tiene exámenes asociados.');
         }
 
+        // Eliminar la imagen de portada asociada (si existe)
+        $series->deleteCover();
+
         $series->delete();
 
         return redirect()->route('admin.series.index')
             ->with('success', 'Serie eliminada correctamente.');
+    }
+
+    /**
+     * Subir imagen de portada para la serie (endpoint AJAX).
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  \App\Models\Series  $series
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function uploadCover(Request $request, Series $series): JsonResponse
+    {
+        $request->validate([
+            'image' => 'required|image|mimes:jpeg,png,webp|max:2048',
+            'alt_text' => 'nullable|string|max:255'
+        ]);
+
+        try {
+            $image = $series->replaceCover($request->file('image'), $request->input('alt_text', ''));
+            return response()->json([
+                'success' => true,
+                'url' => $image->url,
+                'message' => 'Imagen subida correctamente.'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 422);
+        }
+    }
+
+    /**
+     * Eliminar imagen de portada (endpoint AJAX).
+     *
+     * @param  \App\Models\Series  $series
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function deleteCover(Series $series): JsonResponse
+    {
+        $series->deleteCover();
+        return response()->json([
+            'success' => true,
+            'message' => 'Imagen eliminada correctamente.'
+        ]);
     }
 }
