@@ -98,8 +98,10 @@ class LessonController extends Controller
 
         $topic->lessons()->create($validated);
 
-        return redirect()->route('admin.topics.show', $topic)
-            ->with('success', 'Lección creada correctamente.');
+        return redirect()->route('admin.topics.show', [
+    'series' => $topic->series_id,
+    'topic'  => $topic->id,
+])->with('success', 'Lección creada correctamente.');
     }
 
     /**
@@ -325,4 +327,14 @@ class LessonController extends Controller
         }
         return array_values(array_unique($categories));
     }
+
+    public function reorder(Request $request, Topic $topic)
+{
+    $request->validate(['order' => 'required|array', 'order.*' => 'integer']);
+    foreach ($request->order as $index => $id) {
+        Lesson::where('id', $id)->where('topic_id', $topic->id)
+              ->update(['order' => $index + 1]);
+    }
+    return back()->with('success', 'Orden actualizado.');
+}
 }

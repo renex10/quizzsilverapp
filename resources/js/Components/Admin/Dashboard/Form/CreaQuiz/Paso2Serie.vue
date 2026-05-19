@@ -1,3 +1,4 @@
+<!-- resources\js\Components\Admin\Dashboard\Form\CreaQuiz\Paso2Serie.vue -->
 <template>
   <div class="space-y-4">
 

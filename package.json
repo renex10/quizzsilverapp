@@ -25,6 +25,7 @@
         "@formkit/vue": "^2.0.0",
         "@heroicons/vue": "^2.2.0",
         "chart.js": "^4.5.1",
+        "marked": "^18.0.3",
         "pinia": "^3.0.4",
         "sweetalert2": "^11.26.24",
         "vue-chartjs": "^5.3.3"

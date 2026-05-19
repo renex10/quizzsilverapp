@@ -50,7 +50,18 @@
               {{ exam.version }}
             </td>
             <td class="px-4 py-3">
-              <ExamStatusBadge :status="exam.status" />
+              <div class="flex flex-wrap items-center gap-1.5">
+                <ExamStatusBadge :status="exam.status" />
+                <!-- Badge examen madre — visible cuando is_final_exam = true -->
+                <span
+                  v-if="exam.is_final_exam"
+                  class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded
+                         text-xs font-medium bg-purple-100 text-purple-700"
+                  title="Examen madre — sus preguntas alimentan los mini quizzes de los topics"
+                >
+                  ⭐ Final
+                </span>
+              </div>
             </td>
             <td class="px-4 py-3 text-gray-400 text-xs whitespace-nowrap">
               {{ exam.created_at }}
